@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Applied</title>
+<style>
+  body { font-family: sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  nav a { margin-right: 1rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { border-bottom: 1px solid #ddd; padding: 0.5rem; text-align: left; vertical-align: top; }
+  td.actions { white-space: nowrap; text-align: right; width: 1%; }
+  th.actions { width: 1%; }
+  a.apply { display: inline-block; padding: 0.35rem 0.9rem; border: 1px solid #bbb; border-radius: 4px; background: #fff; color: #222; text-decoration: none; font-size: 0.85rem; }
+  a.apply:hover { background: #f0f0f0; }
+  button.icon { min-width: 0; width: 2rem; height: 2rem; padding: 0; font-size: 1rem; line-height: 1; }
+  button.icon + button.icon { margin-left: 0.3rem; }
+  button { padding: 0.35rem 0.9rem; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.85rem; min-width: 5.5rem; }
+  button + button { margin-left: 0.4rem; }
+  button:hover { background: #f0f0f0; }
+  button.trash { color: #a33; border-color: #d9a3a3; }
+  button.trash:hover { background: #fbeaea; }
+  button#search { background: #222; color: #fff; border-color: #222; padding: 0.5rem 1.2rem; }
+  button#search:hover { background: #444; }
+  button#search:disabled { background: #999; border-color: #999; cursor: default; }
+</style>
+</head>
+<body>
+<nav><a href="/">Find roles</a><a href="/applied">Applied</a><a href="/trash">Trash</a></nav>
+<h1>Applied</h1>
+<span id="status"></span>
+<table>
+  <thead><tr><th>Company</th><th>Role</th><th>Kind</th><th>Location</th><th>Link</th><th class="actions"></th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<script>
+const statusText = document.getElementById("status");
+const rows = document.getElementById("rows");
+
+async function loadJobs() {
+  const response = await fetch("/api/jobs?status=applied");
+  const jobs = await response.json();
+  rows.innerHTML = "";
+  for (const job of jobs) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${job.company}</td>
+      <td>${job.role}</td>
+      <td>${job.kind === "newgrad" ? "New grad" : "Internship"}</td>
+      <td>${job.location}</td>
+      <td><a class="apply" href="${job.url}" target="_blank">Apply</a></td>
+      <td class="actions"><button class="icon undo" title="Move back to open">&#8630;</button><button class="icon trash" title="Trash">&#128465;</button></td>`;
+    row.querySelector(".undo").onclick = () => setStatus(job.id, "new");
+    row.querySelector(".trash").onclick = () => setStatus(job.id, "trashed");
+    rows.appendChild(row);
+  }
+  statusText.textContent = `${jobs.length} applied`;
+}
+
+async function setStatus(id, status) {
+  await fetch(`/api/jobs/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  loadJobs();
+}
+
+loadJobs();
+</script>
+</body>
+</html>
