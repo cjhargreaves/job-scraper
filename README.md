@@ -12,9 +12,9 @@ Finds software engineering internships and new grad roles, shows them on a web p
 
 ## What it makes
 
-- A page with a "Find roles" button. Pick summer internship 2027 or new grad 2027, click, and it searches ~120 queries and adds anything new to the database.
-- An open roles list with an Apply button per row, plus mark-applied and trash icons.
-- An applied page and a trash page. Trashed roles never come back on a rerun.
+- A list of open roles with an apply link
+- An applied list
+- A trash list
 
 ## Run locally
 
@@ -24,14 +24,3 @@ uv run uvicorn server:app --reload
 ```
 
 Needs `FIRECRAWL_API_KEY` and `XAI_API_KEY` in `.env`.
-
-## Deploy
-
-```
-fly launch --no-deploy --copy-config
-fly volumes create jobs_data --region sjc --size 1
-fly secrets set APP_PASSWORD='...' FIRECRAWL_API_KEY='...' XAI_API_KEY='...'
-fly deploy
-```
-
-The browser prompts for a password. Username is ignored.
