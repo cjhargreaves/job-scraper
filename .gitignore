@@ -4,3 +4,4 @@ __pycache__/
 *.db
 jobs_resolved.jsonl
 jobs.md
+cache.json

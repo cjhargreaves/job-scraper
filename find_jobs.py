@@ -1,8 +1,10 @@
 """find_jobs.py: search for software engineering roles with Firecrawl, structure them with Grok, save to jobs.jsonl"""
 
+import hashlib
 import json
 import os
 import sys
+import time
 
 import requests
 
@@ -14,6 +16,8 @@ FIRECRAWL_SCRAPE = "https://api.firecrawl.dev/v1/scrape"
 GROK_ENDPOINT = "https://api.x.ai/v1/chat/completions"
 GROK_MODEL = "grok-4.20-0309-non-reasoning"
 SEARCH_LIMIT = 20
+CACHE_FILE = os.path.join(BASE_DIR, "cache.json")
+CACHE_TTL = 24 * 60 * 60
 
 MODES = {
     "internship": {
@@ -127,20 +131,19 @@ GENERIC_TEMPLATES = [
     "2027 software engineer {term}",
     "full stack engineer {term}",
     "backend engineer {term}",
-    "frontend engineer {term}",
-    "mobile engineer {term}",
     "infrastructure engineer {term}",
     "platform engineer {term}",
     "systems software engineer {term}",
-    "embedded software engineer {term}",
     "AI engineer {term}",
     "machine learning engineer {term}",
-    "research engineer {term}",
-    "security engineer {term}",
+    "ML engineer {term}",
+    "machine learning engineer intern {term}",
+    "applied machine learning engineer {term}",
+    "deep learning engineer {term}",
+    "MLOps engineer {term}",
+    "AI/ML engineer {term}",
     "DevOps engineer {term}",
     "cloud engineer {term}",
-    "game engineer {term}",
-    "quant developer {term}",
     "software engineer {term} remote",
     "software engineer {term} New York",
     "software engineer {term} Seattle",
@@ -156,7 +159,6 @@ GENERIC_TEMPLATES = [
     "software engineer {term} YC startup",
     "software engineer {term} fintech",
     "software engineer {term} defense",
-    "software engineer {term} healthcare",
     "software engineer {term} robotics",
     "software engineer {term} hedge fund",
     "software engineer {term} bank",
@@ -211,7 +213,40 @@ def load_key(name):
     return ""
 
 
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE) as cache_file:
+                return json.load(cache_file)
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+
+CACHE = load_cache()
+
+
+def cache_get(key):
+    entry = CACHE.get(key)
+    if entry and time.time() - entry["ts"] < CACHE_TTL:
+        return entry["value"]
+    return None
+
+
+def cache_set(key, value):
+    CACHE[key] = {"ts": time.time(), "value": value}
+    try:
+        with open(CACHE_FILE, "w") as cache_file:
+            json.dump(CACHE, cache_file)
+    except OSError:
+        pass
+
+
 def search_firecrawl(api_key, query):
+    key = f"search:{query}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
     response = requests.post(
         FIRECRAWL_SEARCH,
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -226,7 +261,9 @@ def search_firecrawl(api_key, query):
     for item in results:
         body = item.get("markdown") or item.get("description") or ""
         chunks.append(f"URL: {item.get('url', '')}\nTITLE: {item.get('title', '')}\n{body[:8000]}")
-    return "\n\n---\n\n".join(chunks)
+    joined = "\n\n---\n\n".join(chunks)
+    cache_set(key, joined)
+    return joined
 
 
 def extract_listings(content):
@@ -264,12 +301,16 @@ def extract_listings(content):
 
 def structure_with_grok(api_key, raw_text, mode):
     settings = MODES[mode]
+    cache_key = f"grok:{mode}:{hashlib.sha1(raw_text.encode()).hexdigest()}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
     prompt = (
         f"Extract {settings['prompt_kind']} "
         "Keep only roles located in the United States (any city, or US remote). "
         "Software engineering means: software engineer, SWE, software developer, full stack, backend, "
-        "frontend, mobile, infrastructure, platform, embedded software, systems software, DevOps, cloud, "
-        "security engineer, game engineer, quant developer, AI/ML engineer, research engineer, member of "
+        "infrastructure, platform, systems software, DevOps, cloud, "
+        "AI/ML engineer, member of "
         "technical staff, applied AI engineer. Skip data science/analytics, QA/test, IT support, product "
         "management, and hardware/electrical roles. Skip roles that say they are closed or expired. "
         "If a page is a list of many roles (a GitHub README, a blog post, a job board), extract every "
@@ -305,10 +346,15 @@ def structure_with_grok(api_key, raw_text, mode):
         if str(item.get("season", "")).strip().lower() == wanted:
             item["kind"] = mode
             kept.append(item)
+    cache_set(cache_key, kept)
     return kept
 
 
 def firecrawl_scrape(api_key, url):
+    key = f"scrape:{url}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
     response = requests.post(
         FIRECRAWL_SCRAPE,
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -318,7 +364,9 @@ def firecrawl_scrape(api_key, url):
     if response.status_code != 200:
         print(f"  Firecrawl scrape error {response.status_code}")
         return ""
-    return response.json().get("data", {}).get("markdown", "")
+    markdown = response.json().get("data", {}).get("markdown", "")
+    cache_set(key, markdown)
+    return markdown
 
 
 def scrape_yc(api_key, mode):
