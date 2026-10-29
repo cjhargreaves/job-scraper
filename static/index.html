@@ -2,121 +2,286 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Job finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
-  nav a { margin-right: 1rem; }
-  .toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-  .toolbar label { font-size: 0.9rem; color: #444; }
-  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-  th, td { border-bottom: 1px solid #ddd; padding: 0.5rem; text-align: left; vertical-align: top; }
-  td.actions { white-space: nowrap; text-align: right; width: 1%; }
-  th.actions { width: 1%; }
-  a.apply { display: inline-block; padding: 0.35rem 0.9rem; border: 1px solid #bbb; border-radius: 4px; background: #fff; color: #222; text-decoration: none; font-size: 0.85rem; }
-  a.apply:hover { background: #f0f0f0; }
-  button.icon { min-width: 0; width: 2rem; height: 2rem; padding: 0; font-size: 1rem; line-height: 1; }
-  button.icon + button.icon { margin-left: 0.3rem; }
-  pre { background: #f4f4f4; padding: 0.5rem; max-height: 200px; overflow: auto; font-size: 0.85rem; }
-  button { padding: 0.35rem 0.9rem; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.85rem; min-width: 5.5rem; }
-  button + button { margin-left: 0.4rem; }
-  button:hover { background: #f0f0f0; }
-  button.trash { color: #a33; border-color: #d9a3a3; }
-  button.trash:hover { background: #fbeaea; }
-  button#search { background: #222; color: #fff; border-color: #222; padding: 0.5rem 1.2rem; }
-  button#search:hover { background: #444; }
-  button#search:disabled { background: #999; border-color: #999; cursor: default; }
-  select { padding: 0.4rem; }
+  :root {
+    --bg: #0c0e11;
+    --panel: #14171c;
+    --panel-2: #1b1f26;
+    --border: #252a32;
+    --text: #eef0f3;
+    --muted: #a0a7b1;
+    --accent: #8aa4ff;
+    --good: #4cc38a;
+    --bad: #f07070;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Inter", system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: rgba(12, 14, 17, 0.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .bar { max-width: 1280px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 28px; }
+  .brand { font-weight: 700; letter-spacing: -0.01em; }
+  nav { display: flex; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 8px; }
+  nav a:hover, nav a.active { color: var(--text); background: var(--panel-2); }
+  main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
+  .title { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+  .count { color: var(--muted); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  input, select, button, a.button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; }
+  input[type=search] { flex: 1; min-width: 220px; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  button, a.button { cursor: pointer; text-decoration: none; white-space: nowrap; }
+  button:hover, a.button:hover { background: var(--panel-2); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #0b0d10; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .finder { padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; }
+  .finder .toolbar { margin: 0; }
+  .finder select, .finder input { background: var(--bg); }
+  details.log { margin-top: 12px; }
+  details.log summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details.log pre { margin: 8px 0 0; padding: 10px; max-height: 220px; overflow: auto; background: var(--bg); border-radius: 8px; font: 12px/1.5 ui-monospace, monospace; color: var(--muted); white-space: pre-wrap; }
+  .table { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .job, .head { display: grid; grid-template-columns: 180px minmax(0, 1fr) 170px 110px 250px; gap: 20px; align-items: center; padding: 12px 18px; }
+  .head { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--panel-2); border-bottom: 1px solid var(--border); }
+  .group + .group { border-top: 1px solid #343a44; }
+  .job:hover { background: #181c22; }
+  .company-name { font-size: 15px; font-weight: 600; color: #ff9f4a; }
+  .role { font-size: 15px; color: #d9dde3; }
+  .tag { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--accent); }
+  .loc { font-size: 13.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .actions { justify-content: flex-end; }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.greenhouse { color: #4cc38a; border-color: #20513a; }
+  .badge.lever { color: #c9a2ff; border-color: #4a3766; }
+  .badge.ashby { color: #7fc8ff; border-color: #24496a; }
+  .badge.workday { color: #ffb86b; border-color: #66482a; }
+  .badge.yc { color: #ff8a4c; border-color: #6a3a22; }
+  .badge.linkedin { color: #6fa8ff; border-color: #24406a; }
+  .actions { display: flex; gap: 6px; align-items: center; }
+  .icon { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; }
+  .icon.applied:hover { color: var(--good); border-color: var(--good); }
+  .icon.trashed:hover { color: var(--bad); border-color: var(--bad); }
+  .auto { color: var(--good); border-color: #20513a; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 900px) {
+    .bar { gap: 12px; }
+    .head { display: none; }
+    .job { grid-template-columns: 1fr; gap: 6px; }
+    .company-name:empty { display: none; }
+    .actions { justify-content: flex-start; }
+  }
 </style>
 </head>
 <body>
-<nav><a href="/">Find roles</a><a href="/applied">Applied</a><a href="/trash">Trash</a></nav>
-<h1>Job finder</h1>
-<div class="toolbar">
-  <select id="mode">
-    <option value="internship">Summer internship 2027</option>
-    <option value="newgrad">New grad 2027</option>
-  </select>
-  <button id="search">Find roles</button>
-  <span id="status"></span>
-</div>
-<div class="toolbar">
-  <label>Show
+<header>
+  <div class="bar">
+    <span class="brand">Job finder</span>
+    <nav><a href="/">Open</a><a href="/applied">Applied</a><a href="/trash">Trash</a></nav>
+  </div>
+</header>
+<main>
+  <div class="title"><h1 id="heading"></h1><span class="count" id="count"></span></div>
+  <section class="finder" id="finder" hidden>
+    <div class="toolbar">
+      <select id="mode">
+        <option value="internship">Summer internship 2027</option>
+        <option value="newgrad">New grad 2027</option>
+      </select>
+      <button class="primary" id="boards" title="Free. Pulls straight from Greenhouse, Lever and Ashby boards">Check job boards</button>
+      <button id="search" title="Paid. Runs Firecrawl searches and Grok">Full web search</button>
+      <span class="count" id="status"></span>
+    </div>
+    <details class="log" id="logWrap" hidden><summary>Search log</summary><pre id="log"></pre></details>
+  </section>
+  <div class="toolbar">
+    <input type="search" id="query" placeholder="Search company, role, location">
     <select id="kind">
       <option value="">All kinds</option>
       <option value="internship">Internships</option>
       <option value="newgrad">New grad</option>
     </select>
-  </label>
-</div>
-<pre id="log" hidden></pre>
-<table>
-  <thead><tr><th>Company</th><th>Role</th><th>Kind</th><th>Location</th><th>Apply</th><th class="actions"></th></tr></thead>
-  <tbody id="rows"></tbody>
-</table>
+    <select id="source"></select>
+  </div>
+  <div id="list"></div>
+</main>
+<div id="toast"></div>
 <script>
+const VIEWS = {
+  "/": { status: "new", title: "Open roles", actions: ["applied", "trashed"] },
+  "/applied": { status: "applied", title: "Applied", actions: ["new", "trashed"] },
+  "/trash": { status: "trashed", title: "Trash", actions: ["new", "applied"] },
+};
+const ACTIONS = {
+  applied: { icon: "&#10003;", title: "Mark applied" },
+  trashed: { icon: "&#10005;", title: "Trash" },
+  new: { icon: "&#8634;", title: "Move back to open" },
+};
+const SOURCES = [
+  ["greenhouse.io", "Greenhouse"],
+  ["lever.co", "Lever"],
+  ["ashbyhq.com", "Ashby"],
+  ["myworkdayjobs.com", "Workday"],
+  ["workable.com", "Workable"],
+  ["smartrecruiters.com", "SmartRecruiters"],
+  ["linkedin.com", "LinkedIn"],
+  ["ycombinator.com", "YC"],
+  ["workatastartup.com", "YC"],
+];
+const KIND_LABELS = { internship: "Internship", newgrad: "New grad" };
+const VIEW = VIEWS[location.pathname] || VIEWS["/"];
+
 const searchButton = document.getElementById("search");
+const boardsButton = document.getElementById("boards");
 const modeSelect = document.getElementById("mode");
 const kindSelect = document.getElementById("kind");
+const sourceSelect = document.getElementById("source");
+const queryInput = document.getElementById("query");
 const statusText = document.getElementById("status");
+const countText = document.getElementById("count");
+const logWrap = document.getElementById("logWrap");
 const logBox = document.getElementById("log");
-const rows = document.getElementById("rows");
-const KIND_LABELS = { internship: "Internship", newgrad: "New grad" };
+const list = document.getElementById("list");
+const toast = document.getElementById("toast");
+let jobs = [];
+
+document.getElementById("heading").textContent = VIEW.title;
+document.getElementById("finder").hidden = VIEW.status !== "new";
+for (const link of document.querySelectorAll("nav a")) {
+  link.classList.toggle("active", link.getAttribute("href") === location.pathname);
+}
+
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
+}
+
+function sourceOf(url) {
+  const hit = SOURCES.find(([host]) => url.includes(host));
+  return hit ? hit[1] : "Careers";
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove("show"), 3500);
+}
 
 async function loadJobs() {
-  const params = new URLSearchParams({ status: "new", kind: kindSelect.value });
-  const response = await fetch(`/api/jobs?${params}`);
-  const jobs = await response.json();
-  rows.innerHTML = "";
-  for (const job of jobs) {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${job.company}</td>
-      <td>${job.role}</td>
-      <td>${KIND_LABELS[job.kind] || job.kind}</td>
-      <td>${job.location}</td>
-      <td><a class="apply" href="${job.url}" target="_blank">Apply</a></td>
-      <td class="actions"><button class="icon applied" title="Mark applied">&#10003;</button><button class="icon trash" title="Trash">&#128465;</button></td>`;
-    row.querySelector(".applied").onclick = () => setStatus(job.id, "applied");
-    row.querySelector(".trash").onclick = () => setStatus(job.id, "trashed");
-    rows.appendChild(row);
-  }
-  statusText.textContent = `${jobs.length} open`;
+  const response = await fetch(`/api/jobs?status=${VIEW.status}`);
+  jobs = await response.json();
+  for (const job of jobs) job.source = sourceOf(job.url);
+  const current = sourceSelect.value;
+  const names = [...new Set(jobs.map(job => job.source))].sort();
+  sourceSelect.innerHTML = `<option value="">All sources</option>` + names.map(name => `<option>${esc(name)}</option>`).join("");
+  sourceSelect.value = names.includes(current) ? current : "";
+  render();
 }
 
-async function setStatus(id, status) {
-  await fetch(`/api/jobs/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
-  loadJobs();
+function visibleJobs() {
+  const query = queryInput.value.trim().toLowerCase();
+  return jobs.filter(job =>
+    (!kindSelect.value || job.kind === kindSelect.value) &&
+    (!sourceSelect.value || job.source === sourceSelect.value) &&
+    (!query || `${job.company} ${job.role} ${job.location}`.toLowerCase().includes(query)));
 }
+
+function jobRow(job, companyName) {
+  const autoApply = VIEW.status === "new" && job.source === "Greenhouse"
+    ? `<button class="auto" data-auto="${job.id}" title="Open and fill the Greenhouse form">Auto apply</button>`
+    : "";
+  const buttons = VIEW.actions.map(status =>
+    `<button class="icon ${status}" data-id="${job.id}" data-status="${status}" title="${ACTIONS[status].title}">${ACTIONS[status].icon}</button>`).join("");
+  return `
+    <div class="job">
+      <div class="company-name">${esc(companyName)}</div>
+      <div class="role">${esc(job.role)}${job.kind === "newgrad" ? `<span class="tag">${KIND_LABELS.newgrad}</span>` : ""}</div>
+      <div class="loc" title="${esc(job.location)}">${esc(job.location)}</div>
+      <div><span class="badge ${job.source.toLowerCase()}">${esc(job.source)}</span></div>
+      <div class="actions">${autoApply}<a class="button" href="${esc(job.url)}" target="_blank" rel="noopener">Apply</a>${buttons}</div>
+    </div>`;
+}
+
+function render() {
+  const shown = visibleJobs();
+  const groups = new Map();
+  for (const job of shown) {
+    const key = job.company.trim().toLowerCase() || "unknown";
+    if (!groups.has(key)) groups.set(key, { name: job.company.trim() || "Unknown", jobs: [] });
+    groups.get(key).jobs.push(job);
+  }
+  countText.textContent = `${shown.length} roles at ${groups.size} companies`;
+  if (!shown.length) {
+    list.innerHTML = `<div class="empty">Nothing here.</div>`;
+    return;
+  }
+  const sorted = [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
+  const header = `<div class="head"><span>Company</span><span>Role</span><span>Location</span><span>Source</span><span></span></div>`;
+  const body = sorted.map(group =>
+    `<div class="group">${group.jobs.map((job, index) => jobRow(job, index === 0 ? group.name : "")).join("")}</div>`).join("");
+  list.innerHTML = `<div class="table">${header}${body}</div>`;
+}
+
+list.onclick = async event => {
+  const statusButton = event.target.closest("button[data-status]");
+  if (statusButton) {
+    await fetch(`/api/jobs/${statusButton.dataset.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: statusButton.dataset.status }),
+    });
+    loadJobs();
+    return;
+  }
+  const autoButton = event.target.closest("button[data-auto]");
+  if (autoButton) {
+    autoButton.disabled = true;
+    const response = await fetch(`/api/jobs/${autoButton.dataset.auto}/autoapply`, { method: "POST" });
+    const body = await response.json();
+    showToast(response.ok ? "Opening the form in a browser. Review it and hit submit." : body.detail);
+    autoButton.disabled = false;
+  }
+};
 
 async function pollSearch() {
   const response = await fetch("/api/search/status");
   const state = await response.json();
-  logBox.hidden = false;
+  logWrap.hidden = !state.log.length;
   logBox.textContent = state.log.join("\n");
   logBox.scrollTop = logBox.scrollHeight;
+  searchButton.disabled = boardsButton.disabled = state.running;
   if (state.running) {
-    statusText.textContent = `searching ${state.mode}...`;
-    searchButton.disabled = true;
+    statusText.textContent = `Searching ${state.mode}...`;
     setTimeout(pollSearch, 2000);
   } else {
-    searchButton.disabled = false;
+    statusText.textContent = state.log.length ? state.log[state.log.length - 1] : "";
     loadJobs();
   }
 }
 
-searchButton.onclick = async () => {
-  searchButton.disabled = true;
-  await fetch(`/api/search?mode=${modeSelect.value}`, { method: "POST" });
+async function startSearch(boardsOnly) {
+  searchButton.disabled = boardsButton.disabled = true;
+  logWrap.open = true;
+  await fetch(`/api/search?mode=${modeSelect.value}&boards_only=${boardsOnly}`, { method: "POST" });
   pollSearch();
-};
+}
 
-kindSelect.onchange = loadJobs;
+searchButton.onclick = () => startSearch(false);
+boardsButton.onclick = () => startSearch(true);
+
+queryInput.oninput = render;
+kindSelect.onchange = render;
+sourceSelect.onchange = render;
 loadJobs();
-fetch("/api/search/status").then(r => r.json()).then(state => { if (state.running) pollSearch(); });
+if (VIEW.status === "new") {
+  fetch("/api/search/status").then(response => response.json()).then(state => { if (state.running) pollSearch(); });
+}
 </script>
 </body>
 </html>

@@ -6,6 +6,8 @@ import os
 import secrets
 import shutil
 import sqlite3
+import subprocess
+import sys
 import threading
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,6 +20,7 @@ import find_jobs
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "jobs.db"))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+APPLY_SCRIPT = os.path.join(BASE_DIR, "apply_greenhouse.py")
 SEASON = "summer 2027"
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 
@@ -69,6 +72,7 @@ def init_db():
                 category TEXT DEFAULT 'other',
                 kind TEXT NOT NULL DEFAULT 'internship',
                 status TEXT NOT NULL DEFAULT 'new',
+                job_key TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -82,9 +86,32 @@ def init_db():
             connection.execute("ALTER TABLE jobs ADD COLUMN status TEXT NOT NULL DEFAULT 'new'")
             if "applied" in columns:
                 connection.execute("UPDATE jobs SET status = 'applied' WHERE applied = 1")
+        if "job_key" not in columns:
+            connection.execute("ALTER TABLE jobs ADD COLUMN job_key TEXT")
+        dedupe_jobs(connection)
+        connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS jobs_job_key ON jobs(job_key)")
         count = connection.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
     if count == 0:
         import_jsonl()
+
+
+STATUS_PRIORITY = ("applied", "trashed", "new")
+
+
+def dedupe_jobs(connection):
+    rows = connection.execute("SELECT id, company, role, kind, url, status FROM jobs").fetchall()
+    groups = {}
+    for row in rows:
+        groups.setdefault(find_jobs.job_key(dict(row)), []).append(row)
+    connection.execute("UPDATE jobs SET job_key = NULL")
+    for key, group in groups.items():
+        keeper = min(group, key=lambda row: find_jobs.source_rank(row["url"]))
+        statuses = {row["status"] for row in group}
+        status = next((name for name in STATUS_PRIORITY if name in statuses), keeper["status"])
+        for row in group:
+            if row["id"] != keeper["id"]:
+                connection.execute("DELETE FROM jobs WHERE id = ?", (row["id"],))
+        connection.execute("UPDATE jobs SET job_key = ?, status = ? WHERE id = ?", (key, status, keeper["id"]))
 
 
 def is_season(listing):
@@ -114,9 +141,15 @@ def insert_listings(listings):
             url = listing.get("url", "")
             if not url:
                 continue
+            key = find_jobs.job_key(listing)
+            existing = connection.execute("SELECT id, url FROM jobs WHERE job_key = ?", (key,)).fetchone()
+            if existing:
+                if find_jobs.source_rank(url) < find_jobs.source_rank(existing["url"]):
+                    connection.execute("UPDATE OR IGNORE jobs SET url = ? WHERE id = ?", (url, existing["id"]))
+                continue
             cursor = connection.execute(
-                "INSERT OR IGNORE INTO jobs (company, role, location, url, deadline, season, kind) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO jobs (company, role, location, url, deadline, season, kind, job_key) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     listing.get("company", ""),
                     listing.get("role", ""),
@@ -124,19 +157,28 @@ def insert_listings(listings):
                     url,
                     listing.get("deadline", ""),
                     str(listing.get("season", SEASON)).strip().lower(),
-                    listing.get("kind", "internship"),
+                    listing.get("kind") or "internship",
+                    key,
                 ),
             )
             inserted += cursor.rowcount
     return inserted
 
 
-def run_search(mode):
+def run_search(mode, boards_only):
     search_state["log"] = []
     search_state["new_count"] = 0
     search_state["mode"] = mode
     try:
-        total = find_jobs.collect_listings(insert_listings, mode=mode, log=search_state["log"].append)
+        with connect() as connection:
+            known_urls = [row["url"] for row in connection.execute("SELECT url FROM jobs")]
+        total = find_jobs.collect_listings(
+            insert_listings,
+            mode=mode,
+            log=search_state["log"].append,
+            known_urls=known_urls,
+            boards_only=boards_only,
+        )
         search_state["new_count"] = total
         search_state["log"].append(f"Done. {total} new listings.")
     except Exception as error:
@@ -159,12 +201,12 @@ def index_page():
 
 @app.get("/applied")
 def applied_page():
-    return FileResponse(os.path.join(STATIC_DIR, "applied.html"))
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/trash")
 def trash_page():
-    return FileResponse(os.path.join(STATIC_DIR, "trash.html"))
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/api/jobs")
@@ -198,15 +240,29 @@ def set_status(job_id: int, update: StatusUpdate):
     return dict(row)
 
 
+@app.post("/api/jobs/{job_id}/autoapply")
+def auto_apply(job_id: int):
+    with connect() as connection:
+        row = connection.execute("SELECT url FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if "greenhouse.io" not in row["url"]:
+        raise HTTPException(status_code=400, detail="auto apply only supports Greenhouse links")
+    if not os.path.exists(APPLY_SCRIPT):
+        raise HTTPException(status_code=400, detail="auto apply only runs locally")
+    subprocess.Popen([sys.executable, "-u", APPLY_SCRIPT, row["url"]], cwd=BASE_DIR)
+    return {"started": True}
+
+
 @app.post("/api/search")
-def start_search(mode: str = "internship"):
+def start_search(mode: str = "internship", boards_only: bool = False):
     if mode not in find_jobs.MODES:
         raise HTTPException(status_code=400, detail=f"mode must be one of {list(find_jobs.MODES)}")
     with search_lock:
         if search_state["running"]:
             return {"started": False, "running": True}
         search_state["running"] = True
-    threading.Thread(target=run_search, args=(mode,), daemon=True).start()
+    threading.Thread(target=run_search, args=(mode, boards_only), daemon=True).start()
     return {"started": True, "running": True}
 
 

@@ -5,3 +5,4 @@ __pycache__/
 jobs_resolved.jsonl
 jobs.md
 cache.json
+profile.json

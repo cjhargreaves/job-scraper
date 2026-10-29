@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 
@@ -14,7 +15,7 @@ FALLBACK_ENV = os.path.join(BASE_DIR, "..", "ml-training-data", ".env")
 FIRECRAWL_SEARCH = "https://api.firecrawl.dev/v1/search"
 FIRECRAWL_SCRAPE = "https://api.firecrawl.dev/v1/scrape"
 GROK_ENDPOINT = "https://api.x.ai/v1/chat/completions"
-GROK_MODEL = "grok-4.20-0309-non-reasoning"
+GROK_MODEL = "grok-4.5"
 SEARCH_LIMIT = 20
 CACHE_FILE = os.path.join(BASE_DIR, "cache.json")
 CACHE_TTL = 24 * 60 * 60
@@ -185,6 +186,111 @@ MODE_LIST_QUERIES = {
     "internship": ["site:github.com Summer2027-Internships"],
     "newgrad": ["site:github.com New-Grad-Positions 2027"],
 }
+
+
+ATS_HOSTS = [
+    "greenhouse.io",
+    "lever.co",
+    "ashbyhq.com",
+    "myworkdayjobs.com",
+    "workable.com",
+    "smartrecruiters.com",
+    "rippling-ats.com",
+    "jobs.dover.com",
+    "icims.com",
+    "jobvite.com",
+]
+BOARD_HOSTS = ["ycombinator.com", "workatastartup.com"]
+COMPANY_NOISE = re.compile(r"\b(inc|llc|ltd|corp|corporation|co)\b")
+ROLE_NOISE = re.compile(
+    r"\b(summer|fall|winter|spring|2026|2027|2028|intern|interns|internship|internships|co op|new grad|new graduate)\b"
+)
+ROLE_SYNONYMS = {"engineering": "engineer", "swe": "software engineer", "sde": "software development engineer"}
+
+
+COMPANY_BOARDS = {
+    "greenhouse": [
+        "affirm", "airbnb", "airtable", "andurilindustries", "anthropic", "asana", "brex", "chime", "cloudflare",
+        "cockroachlabs", "coinbase", "databricks", "datadog", "discord", "dropbox", "duolingo", "elastic", "faire",
+        "figma", "flexport", "gitlab", "grammarly", "gusto", "instacart", "intercom", "lyft", "mongodb",
+        "neuralink", "nuro", "okta", "pagerduty", "pinterest", "postman", "reddit", "robinhood", "roblox",
+        "samsara", "scaleai", "spacex", "squarespace", "stripe", "toast", "twilio", "twitch", "vercel",
+        "verkada", "waymo", "webflow",
+    ],
+    "lever": ["palantir", "plaid", "spotify", "zoox"],
+    "ashby": ["cohere", "cursor", "harvey", "linear", "modal", "notion", "openai", "posthog", "ramp", "replit", "supabase"],
+}
+BOARD_APIS = {
+    "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{token}/jobs",
+    "lever": "https://api.lever.co/v0/postings/{token}?mode=json",
+    "ashby": "https://api.ashbyhq.com/posting-api/job-board/{token}",
+}
+BOARD_URL_PATTERNS = {
+    "greenhouse": re.compile(r"greenhouse\.io/(?:embed/job_app\?for=)?([A-Za-z0-9_-]+)"),
+    "lever": re.compile(r"jobs\.lever\.co/([A-Za-z0-9_.-]+)"),
+    "ashby": re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.-]+)"),
+}
+NOT_TOKENS = {"embed", "v1", "jobs"}
+SIMPLIFY_LISTINGS = {
+    "internship": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
+    "newgrad": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+}
+SIMPLIFY_CATEGORIES = {"Software", "Software Engineering", "AI/ML/Data", "Data Science, AI & Machine Learning"}
+SOFTWARE_TITLE = re.compile(
+    r"software|engineer|developer|\bswe\b|\bsde\b|machine learning|\bml\b|\bai\b|infrastructure|backend|back end|"
+    r"full ?stack|platform|devops|\bsre\b|reliability",
+    re.IGNORECASE,
+)
+EXCLUDED_TITLE = re.compile(
+    r"hardware|electrical|mechanical|manufactur|sales|recruit|analyst|accounting|marketing|legal|finance|support|"
+    r"technician|verification|asic|fpga|silicon|firmware|embedded|front ?end|\bios\b|android|mobile|game|"
+    r"security|quant|research scientist|researcher|data scien",
+    re.IGNORECASE,
+)
+INTERN_TITLE = re.compile(r"\bintern\b|internship|co-?op", re.IGNORECASE)
+OFF_SEASON = re.compile(r"\b(fall|winter|spring)\b", re.IGNORECASE)
+NEWGRAD_TITLE = re.compile(
+    r"new grad|new graduate|university grad|college grad|early career|entry[- ]level|\b(engineer|developer),? i\b",
+    re.IGNORECASE,
+)
+SENIOR_TITLE = re.compile(r"senior|\bsr\b|staff|principal|\blead\b|manager|director|\bii\b|\biii\b|\biv\b", re.IGNORECASE)
+US_EXPLICIT = re.compile(r"united states|\bUSA?\b", re.IGNORECASE)
+US_STATE = re.compile(
+    r"[,\s](AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|"
+    r"OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b"
+)
+US_CITY = re.compile(
+    r"new york|nyc|san francisco|seattle|bay area|boston|austin|chicago|los angeles|denver|atlanta|palo alto|"
+    r"mountain view|menlo park|sunnyvale|san jose|redmond|remote",
+    re.IGNORECASE,
+)
+NON_US = re.compile(
+    r"canada|toronto|vancouver|united kingdom|\buk\b|london|ireland|dublin|india|bangalore|bengaluru|hyderabad|"
+    r"germany|berlin|france|paris|netherlands|amsterdam|poland|spain|israel|singapore|japan|tokyo|australia|"
+    r"sydney|brazil|mexico|china|hong kong|korea|taiwan|switzerland|zurich|sweden|europe|emea|apac|latam",
+    re.IGNORECASE,
+)
+
+
+def normalize(text):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(text).lower()).split())
+
+
+def job_key(listing):
+    company = " ".join(COMPANY_NOISE.sub(" ", normalize(listing.get("company", ""))).split())
+    role_words = [ROLE_SYNONYMS.get(word, word) for word in normalize(listing.get("role", "")).split()]
+    role = " ".join(ROLE_NOISE.sub(" ", " ".join(role_words)).split())
+    return f"{listing.get('kind') or 'internship'}|{company}|{role}"
+
+
+def source_rank(url):
+    if any(host in url for host in ATS_HOSTS):
+        return 0
+    if "linkedin.com" in url:
+        return 3
+    if any(host in url for host in BOARD_HOSTS):
+        return 2
+    return 1
 
 
 def build_queries(mode):
@@ -392,34 +498,202 @@ def scrape_linkedin_guest(api_key, mode):
     return "\n\n---\n\n".join(pages)
 
 
+def wanted_title(title, mode):
+    if not SOFTWARE_TITLE.search(title) or EXCLUDED_TITLE.search(title):
+        return False
+    if set(re.findall(r"20\d\d", title)) - {"2027"}:
+        return False
+    if mode == "internship":
+        return bool(INTERN_TITLE.search(title)) and not OFF_SEASON.search(title)
+    return bool(NEWGRAD_TITLE.search(title)) and not INTERN_TITLE.search(title) and not SENIOR_TITLE.search(title)
+
+
+def is_us(location):
+    if not location.strip() or US_EXPLICIT.search(location):
+        return True
+    if NON_US.search(location):
+        return False
+    return bool(US_STATE.search(location) or US_CITY.search(location))
+
+
+def board_tokens(urls):
+    tokens = {ats: set(names) for ats, names in COMPANY_BOARDS.items()}
+    for url in urls:
+        for ats, pattern in BOARD_URL_PATTERNS.items():
+            match = pattern.search(url)
+            if match and match.group(1).lower() not in NOT_TOKENS:
+                tokens[ats].add(match.group(1).lower())
+    return tokens
+
+
+def company_name(token):
+    return token.replace("-", " ").replace("_", " ").title()
+
+
+def fetch_board(ats, token):
+    key = f"board:{ats}:{token}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
+    try:
+        response = requests.get(BOARD_APIS[ats].format(token=token), timeout=30)
+    except requests.RequestException:
+        return []
+    if response.status_code != 200:
+        cache_set(key, False)
+        return False
+    data = response.json()
+    if ats == "greenhouse":
+        jobs = [
+            {
+                "company": job.get("company_name") or company_name(token),
+                "role": job.get("title", ""),
+                "location": (job.get("location") or {}).get("name", ""),
+                "url": f"https://job-boards.greenhouse.io/{token}/jobs/{job['id']}",
+            }
+            for job in data.get("jobs", [])
+        ]
+    elif ats == "lever":
+        jobs = [
+            {
+                "company": company_name(token),
+                "role": job.get("text", ""),
+                "location": (job.get("categories") or {}).get("location") or "",
+                "url": job.get("hostedUrl", ""),
+            }
+            for job in data
+        ]
+    else:
+        jobs = [
+            {
+                "company": company_name(token),
+                "role": job.get("title", ""),
+                "location": job.get("location") or "",
+                "url": job.get("jobUrl", ""),
+            }
+            for job in data.get("jobs", [])
+        ]
+    jobs = [job for job in jobs if SOFTWARE_TITLE.search(job["role"]) and not EXCLUDED_TITLE.search(job["role"])]
+    cache_set(key, jobs)
+    return jobs
+
+
+def scrape_boards(mode, tokens, done, on_new, log):
+    total_new = 0
+    for ats, names in tokens.items():
+        names = sorted(names - done[ats])
+        if not names:
+            continue
+        done[ats].update(names)
+        log(f"{ats}: checking {len(names)} boards...")
+        listings = []
+        dead = []
+        for token in names:
+            jobs = fetch_board(ats, token)
+            if jobs is False:
+                dead.append(token)
+                continue
+            for job in jobs:
+                if job["url"] and wanted_title(job["role"], mode) and is_us(job["location"]):
+                    listings.append({**job, "deadline": "", "season": MODES[mode]["season"], "kind": mode})
+        count = on_new(listings)
+        log(f"{ats}: {len(listings)} matching roles, {count} new.")
+        if dead:
+            log(f"{ats}: no board found for {', '.join(dead)}")
+        total_new += count
+    return total_new
+
+
+def simplify_title_ok(title, mode):
+    if not SOFTWARE_TITLE.search(title) or EXCLUDED_TITLE.search(title):
+        return False
+    if set(re.findall(r"20\d\d", title)) - {"2027"}:
+        return False
+    return mode == "internship" or not (INTERN_TITLE.search(title) or SENIOR_TITLE.search(title))
+
+
+def fetch_simplify(mode, log):
+    key = f"simplify:{mode}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
+    try:
+        response = requests.get(SIMPLIFY_LISTINGS[mode], timeout=120)
+    except requests.RequestException as error:
+        log(f"Simplify: request failed ({error}).")
+        return []
+    if response.status_code != 200:
+        log(f"Simplify: error {response.status_code}.")
+        return []
+    listings = []
+    for item in response.json():
+        if not item.get("active") or not item.get("is_visible", True):
+            continue
+        if item.get("category") not in SIMPLIFY_CATEGORIES:
+            continue
+        if mode == "internship" and "Summer 2027" not in item.get("terms", []):
+            continue
+        title = item.get("title", "")
+        locations = item.get("locations") or []
+        if not simplify_title_ok(title, mode) or not any(is_us(place) for place in locations or [""]):
+            continue
+        listings.append({
+            "company": item.get("company_name", ""),
+            "role": title,
+            "location": "; ".join(locations),
+            "url": item.get("url", ""),
+            "deadline": "",
+            "season": MODES[mode]["season"],
+            "kind": mode,
+        })
+    cache_set(key, listings)
+    return listings
+
+
 def save_listings(listings, seen):
     count = 0
     with open(JOBS_FILE, "a") as jobs_file:
         for listing in listings:
             url = listing.get("url", "")
-            if url and url not in seen:
-                seen.add(url)
+            key = job_key(listing)
+            if url and key not in seen:
+                seen.add(key)
                 jobs_file.write(json.dumps(listing) + "\n")
                 count += 1
     return count
 
 
-def collect_listings(on_new, mode="internship", log=print):
+def collect_listings(on_new, mode="internship", log=print, known_urls=(), boards_only=False):
     if mode not in MODES:
         raise RuntimeError(f"Unknown mode {mode!r}. Choose from {list(MODES)}.")
+    log("Simplify: loading list...")
+    simplify = fetch_simplify(mode, log)
+    total_new = on_new(simplify)
+    log(f"Simplify: {len(simplify)} matching roles, {total_new} new.")
+    known_urls = [*known_urls, *(listing["url"] for listing in simplify)]
+    done = {ats: set() for ats in BOARD_APIS}
+    total_new += scrape_boards(mode, board_tokens(known_urls), done, on_new, log)
+    if boards_only:
+        return total_new
+
     firecrawl_key = load_key("FIRECRAWL_API_KEY")
     grok_key = load_key("XAI_API_KEY")
     if not firecrawl_key or not grok_key:
         raise RuntimeError("Missing FIRECRAWL_API_KEY or XAI_API_KEY.")
 
-    total_new = 0
+    found_urls = set(known_urls)
+
+    def record(listings):
+        found_urls.update(listing.get("url", "") for listing in listings)
+        return on_new(listings)
+
     for query in build_queries(mode):
         log(f"Searching: {query}")
         raw = search_firecrawl(firecrawl_key, query)
         if not raw:
             continue
         listings = structure_with_grok(grok_key, raw, mode)
-        count = on_new(listings)
+        count = record(listings)
         log(f"{count} new listings ({len(listings)} extracted).")
         total_new += count
 
@@ -432,26 +706,32 @@ def collect_listings(on_new, mode="internship", log=print):
             continue
         log(f"{name}: structuring with Grok...")
         listings = structure_with_grok(grok_key, raw, mode)
-        count = on_new(listings)
+        count = record(listings)
         log(f"{name}: {count} new listings ({len(listings)} extracted).")
         total_new += count
 
+    total_new += scrape_boards(mode, board_tokens(found_urls), done, on_new, log)
     return total_new
 
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "internship"
     seen = set()
+    known_urls = []
     if os.path.exists(JOBS_FILE):
         with open(JOBS_FILE) as jobs_file:
             for line in jobs_file:
                 try:
-                    seen.add(json.loads(line)["url"])
-                except (json.JSONDecodeError, KeyError):
+                    listing = json.loads(line)
+                except json.JSONDecodeError:
                     continue
+                seen.add(job_key(listing))
+                known_urls.append(listing.get("url", ""))
 
     try:
-        total_new = collect_listings(lambda listings: save_listings(listings, seen), mode=mode)
+        total_new = collect_listings(
+            lambda listings: save_listings(listings, seen), mode=mode, known_urls=known_urls
+        )
     except RuntimeError as error:
         sys.exit(str(error))
 
